@@ -4,15 +4,17 @@ using UnityEngine;
 
 public class MazeCellObject : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    [SerializeField] GameObject topWall;
+    [SerializeField] GameObject bottomWall;
+    [SerializeField] GameObject leftWall;
+    [SerializeField] GameObject rightWall;
+
+    public void Init (bool top, bool bottom, bool right, bool left)
     {
-        
+        topWall.SetActive (top);
+        bottomWall.SetActive (bottom);
+        leftWall.SetActive (left);
+        rightWall.SetActive (right);
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }
