@@ -13,6 +13,7 @@ public class PlayerMovement : MonoBehaviour
     public float mouseSensitivity;
     private Vector3 velocity;
     private float xRotation = 0f;
+    public GameObject spotlight;
 
     void Start()
     {
@@ -51,5 +52,13 @@ public class PlayerMovement : MonoBehaviour
 
         playerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         transform.Rotate(Vector3.up * mouseX);
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            if (spotlight != null)
+            {
+                spotlight.SetActive(!spotlight.activeSelf);
+            }
+        }
     }
 }
