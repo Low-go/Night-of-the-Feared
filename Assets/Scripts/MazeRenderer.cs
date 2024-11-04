@@ -12,28 +12,75 @@ public class MazeRenderer : MonoBehaviour
 
     public float CellSize = 1f;
 
+    [Header("NavMesh Settings")]
+    [SerializeField] private float navMeshAgentRadius = 0.4f;
+    [SerializeField] private float navMeshMinRegionArea = 0.1f;
+
+
     private void Awake()
     {
-        // Add and configure NavMeshSurface
-        mazeNavMeshSurface = gameObject.AddComponent<NavMeshSurface>();
-        if (mazeNavMeshSurface != null)
-        {
-            Debug.Log("NavMeshSurface component added successfully");
-            mazeNavMeshSurface.collectObjects = CollectObjects.Children;
-            mazeNavMeshSurface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
-        }
-        else
-        {
-            Debug.LogError("Failed to add NavMeshSurface component!");
-        }
+
+        SetupNavMeshSurface();
+        
     }
+
+private void SetupNavMeshSurface()
+{
+    mazeNavMeshSurface = gameObject.AddComponent<NavMeshSurface>();
+    if (mazeNavMeshSurface != null)
+    {
+        Debug.Log("Configuring NavMeshSurface...");
+
+        // Configure NavMeshSurface
+        mazeNavMeshSurface.collectObjects = CollectObjects.Children;
+        mazeNavMeshSurface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+
+        // Set NavMesh baking settings
+        var settings = mazeNavMeshSurface.GetBuildSettings();
+        settings.agentRadius = navMeshAgentRadius;
+        settings.minRegionArea = navMeshMinRegionArea;
+        mazeNavMeshSurface.defaultArea = NavMesh.GetAreaFromName("Walkable");
+        mazeNavMeshSurface.overrideTileSize = true;
+        mazeNavMeshSurface.tileSize = 256;
+
+        Debug.Log($"NavMeshSurface configured with agent radius: {navMeshAgentRadius}");
+    }
+    else
+    {
+        Debug.LogError("Failed to add NavMeshSurface component!");
+    }
+}
 
     private void Start()
     {
         Debug.Log("Starting maze generation...");
         GenerateMaze();
-        StartCoroutine(BakeNavMeshWhenReady());
+        StartCoroutine(BakeNavMeshWithVerification());
     }
+
+    private IEnumerator BakeNavMeshWithVerification()
+    {
+        yield return new WaitForEndOfFrame();
+        Debug.Log("Starting NavMesh baking process...");
+
+        if (mazeNavMeshSurface == null)
+        {
+            Debug.LogError("NavMeshSurface is null! Baking failed.");
+            yield break;
+        }
+
+        // Clear existing NavMesh
+        mazeNavMeshSurface.RemoveData();
+        Debug.Log("Cleared existing NavMesh data");
+
+        // Bake new NavMesh
+        mazeNavMeshSurface.BuildNavMesh();
+        yield return new WaitForEndOfFrame();
+
+        // Verify baking and coverage
+        VerifyNavMeshCoverage();
+    }
+
 
     private void GenerateMaze()
     {
@@ -83,6 +130,42 @@ public class MazeRenderer : MonoBehaviour
 
         // Verify the baking
         VerifyNavMeshBaking();
+    }
+
+    private void VerifyNavMeshCoverage()
+    {
+        if (mazeNavMeshSurface.navMeshData == null)
+        {
+            Debug.LogError("NavMesh baking failed - no NavMesh data generated!");
+            return;
+        }
+
+        // Test multiple points across the maze
+        int testPoints = 10;
+        int navigablePoints = 0;
+
+        for (int i = 0; i < testPoints; i++)
+        {
+            Vector3 testPoint = new Vector3(
+                Random.Range(0, mazeGenerator.mazeWidth * CellSize),
+                0f,
+                Random.Range(0, mazeGenerator.mazeHeight * CellSize)
+            );
+
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(testPoint, out hit, 1.0f, NavMesh.AllAreas))
+            {
+                navigablePoints++;
+            }
+        }
+
+        float coverage = (float)navigablePoints / testPoints;
+        Debug.Log($"NavMesh Coverage Test: {coverage * 100}% of test points are navigable");
+
+        if (coverage < 0.5f)
+        {
+            Debug.LogWarning("Low NavMesh coverage detected! Check maze cell setup and NavMesh settings.");
+        }
     }
 
     private void VerifyNavMeshBaking()
