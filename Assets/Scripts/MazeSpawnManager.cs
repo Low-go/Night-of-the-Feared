@@ -251,7 +251,6 @@ public class MazeSpawnManager : MonoBehaviour
     {
         for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            // Generate a random point within reasonable distance
             float angle = Random.Range(0f, 360f);
             float distance = Random.Range(minDistanceBetweenPatrolPoints, minDistanceBetweenPatrolPoints * 2f);
 
@@ -263,24 +262,18 @@ public class MazeSpawnManager : MonoBehaviour
 
             Vector3 potentialPoint = route.spawnPoint + offset;
 
-            // Convert to maze coordinates
             int mazeX = Mathf.FloorToInt(potentialPoint.x / cellSize);
             int mazeY = Mathf.FloorToInt(potentialPoint.z / cellSize);
 
-            // Check if within maze bounds
             if (mazeX >= 0 && mazeX < mazeGenerator.mazeWidth - 1 &&
                 mazeY >= 0 && mazeY < mazeGenerator.mazeHeight - 1)
             {
                 if (IsValidPatrolPoint(potentialPoint))
                 {
-                    // Verify NavMesh path exists
-                    NavMeshPath path = new NavMeshPath();
-                    if (NavMesh.CalculatePath(route.spawnPoint, potentialPoint, NavMesh.AllAreas, path))
+                    // Ensure patrol point is on NavMesh
+                    if (NavMesh.SamplePosition(potentialPoint, out NavMeshHit hit, cellSize, NavMesh.AllAreas))
                     {
-                        if (path.status == NavMeshPathStatus.PathComplete)
-                        {
-                            return potentialPoint;
-                        }
+                        return hit.position;
                     }
                 }
             }
@@ -288,7 +281,6 @@ public class MazeSpawnManager : MonoBehaviour
 
         return null;
     }
-
     private bool IsValidPatrolPoint(Vector3 point)
     {
         // Check if point is clear of obstacles

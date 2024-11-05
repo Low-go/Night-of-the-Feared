@@ -85,11 +85,15 @@ public class AIMovement : MonoBehaviour
         if (visionCone.IsWallAhead(out Vector3 betterDirection))
         {
             Vector3 newTargetPosition = transform.position + betterDirection * 3f;
-            if (NavMesh.SamplePosition(newTargetPosition, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+            NavMeshPath path = new NavMeshPath(); // Declare the path variable
+
+            // Pass the existing path variable to the method without using 'out' again
+            if (NavMesh.CalculatePath(transform.position, newTargetPosition, NavMesh.AllAreas, path) &&
+                path.status == NavMeshPathStatus.PathComplete)
             {
-                agent.SetDestination(hit.position);
+                agent.SetPath(path);
+                agent.speed *= 0.8f;
             }
-            agent.speed *= 0.8f;
         }
         else
         {
