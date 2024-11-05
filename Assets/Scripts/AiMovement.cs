@@ -11,7 +11,7 @@ public class AIMovement : MonoBehaviour
     [SerializeField] private float patrolSpeed = 2f;
     [SerializeField] private float chaseSpeed = 4f;
     [SerializeField] private float searchSpeed = 3f;
-    [SerializeField] private float rotationSpeed = 120f; // Degrees per second
+    [SerializeField] private float rotationSpeed = 120f;
     [SerializeField] private float waitTimeAtPatrolPoint = 2f;
     [SerializeField] private float searchDuration = 5f;
     [SerializeField] private float searchAreaRadius = 3f;
@@ -44,7 +44,6 @@ public class AIMovement : MonoBehaviour
         MazeSpawnManager spawnManager = FindObjectOfType<MazeSpawnManager>();
         if (spawnManager != null)
         {
-            // Find the patrol route for this specific enemy
             foreach (var route in spawnManager.PatrolRoutes)
             {
                 if (Vector3.Distance(route.spawnPoint, transform.position) < 0.1f)
@@ -55,7 +54,6 @@ public class AIMovement : MonoBehaviour
             }
         }
 
-        // Set initial state and speed
         currentState = AIState.Patrolling;
         agent.speed = patrolSpeed;
         MoveToNextPatrolPoint();
@@ -63,6 +61,8 @@ public class AIMovement : MonoBehaviour
 
     private void Update()
     {
+        UpdateMovement(); // Wall avoidance check
+
         switch (currentState)
         {
             case AIState.Patrolling:
@@ -77,6 +77,36 @@ public class AIMovement : MonoBehaviour
             case AIState.WaitingAtPatrol:
                 HandleWaitState();
                 break;
+        }
+    }
+
+    private void UpdateMovement()
+    {
+        if (visionCone.IsWallAhead(out Vector3 betterDirection))
+        {
+            Vector3 newTargetPosition = transform.position + betterDirection * 3f;
+            if (NavMesh.SamplePosition(newTargetPosition, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+            {
+                agent.SetDestination(hit.position);
+            }
+            agent.speed *= 0.8f;
+        }
+        else
+        {
+            agent.speed = GetCurrentStateSpeed();
+        }
+    }
+
+    private float GetCurrentStateSpeed()
+    {
+        switch (currentState)
+        {
+            case AIState.Chasing:
+                return chaseSpeed;
+            case AIState.Searching:
+                return searchSpeed;
+            default:
+                return patrolSpeed;
         }
     }
 
@@ -149,9 +179,8 @@ public class AIMovement : MonoBehaviour
         float searchTime = 0f;
         while (searchTime < searchDuration)
         {
-            // Generate random points around last known position
             Vector3 searchPoint = lastKnownPlayerPos + Random.insideUnitSphere * searchAreaRadius;
-            searchPoint.y = transform.position.y; // Keep on the same Y level
+            searchPoint.y = transform.position.y;
 
             NavMeshPath path = new NavMeshPath();
             if (NavMesh.CalculatePath(transform.position, searchPoint, NavMesh.AllAreas, path))
@@ -159,7 +188,6 @@ public class AIMovement : MonoBehaviour
                 agent.SetPath(path);
             }
 
-            // Wait until reaching the search point or timeout
             float searchPointTimeout = 0f;
             while (!HasReachedDestination() && searchPointTimeout < 2f)
             {
@@ -167,7 +195,6 @@ public class AIMovement : MonoBehaviour
                 yield return null;
             }
 
-            // Look around at search point
             float rotationTime = 0f;
             while (rotationTime < 1f)
             {
@@ -180,7 +207,6 @@ public class AIMovement : MonoBehaviour
             yield return null;
         }
 
-        // Return to patrol after searching
         currentState = AIState.Patrolling;
         agent.speed = patrolSpeed;
         MoveToNextPatrolPoint();
@@ -191,7 +217,6 @@ public class AIMovement : MonoBehaviour
         isWaitingAtPatrol = true;
         currentState = AIState.WaitingAtPatrol;
 
-        // Look around while waiting
         float waitedTime = 0f;
         while (waitedTime < waitTimeAtPatrolPoint)
         {
@@ -224,9 +249,7 @@ public class AIMovement : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            // Handle player catch event
             Debug.Log("Caught the player!");
-            // Add your game over or player caught logic here
         }
     }
 }
