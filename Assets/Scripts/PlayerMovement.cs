@@ -15,8 +15,8 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("FlashLight Stuff")]
     public GameObject spotlight;
-    public Slider batterySlider;
-    public float batteryDrainRate = 0.1f; // how fast battery drains
+    private Slider batterySlider;
+    public float batteryDrainRate = 0.02f; // how fast battery drains
     private float currentBattery = 1f;
     public AudioClip clickSound;
     private AudioSource audioSource;
@@ -28,8 +28,24 @@ public class PlayerMovement : MonoBehaviour
         controller = GetComponent<CharacterController>();
         audioSource = gameObject.AddComponent<AudioSource>();
 
+        batterySlider = GameObject.Find("Slider")?.GetComponent<Slider>();
         currentBattery = 1f;
-        batterySlider.value = currentBattery;
+
+        // this if for test purposes, please delete later
+        if (batterySlider != null)
+        {
+            Debug.Log("Slider successfully found and assigned!");
+            batterySlider.value = currentBattery;
+        }
+        else
+        {
+            Debug.LogWarning("Slider not found! Check the slider's name or ensure it is in the scene.");
+        }
+        //lets start this off
+        spotlight.SetActive(false);
+
+        //currentBattery = 1f;
+        //batterySlider.value = currentBattery;
     }
 
     void Update()

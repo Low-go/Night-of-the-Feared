@@ -50,8 +50,6 @@ public class MazeCellObject : MonoBehaviour
                 obstacle.size = wall.GetComponent<BoxCollider>().size;
             }
 
-            // Set to obstacle layer
-            wall.layer = LayerMask.NameToLayer("Obstacle");
         }
     }
 
