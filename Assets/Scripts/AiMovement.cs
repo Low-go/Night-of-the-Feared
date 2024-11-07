@@ -16,6 +16,9 @@ public class AIMovement : MonoBehaviour
     [SerializeField] private float searchDuration = 5f;
     [SerializeField] private float searchAreaRadius = 3f;
 
+    [Header("light Sensitivity")]
+    private bool isInLight = false;
+
     private NavMeshAgent agent;
     private EnemyVisionCone visionCone;
     private List<Vector3> patrolPoints;
@@ -33,12 +36,24 @@ public class AIMovement : MonoBehaviour
         WaitingAtPatrol
     }
 
+    //to freeze them if they are fearful
+    public bool IsInLight
+    {
+        get => isInLight;
+        set 
+        {
+            Debug.Log($"[AIMovement] {gameObject.name} IsInLight changing from {isInLight} to {value}");
+            isInLight = value;
+        }
+    }
+
     private AIState currentState;
 
     private void Start()
     {
         agent = GetComponent<NavMeshAgent>();
         visionCone = GetComponent<EnemyVisionCone>();
+
 
         // Get patrol points from spawn manager
         MazeSpawnManager spawnManager = FindObjectOfType<MazeSpawnManager>();
@@ -61,6 +76,7 @@ public class AIMovement : MonoBehaviour
 
     private void Update()
     {
+        
         UpdateMovement(); // Wall avoidance check
 
         switch (currentState)
@@ -82,6 +98,35 @@ public class AIMovement : MonoBehaviour
 
     private void UpdateMovement()
     {
+
+        if (isInLight)
+        {
+            agent.isStopped = true;
+            return;
+        }
+
+        // Resume movement
+        agent.isStopped = false;
+        agent.speed = GetCurrentStateSpeed(); // Explicitly reset the speed
+
+        // If we were interrupted by light, make sure we're still going to our destination
+        if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
+        {
+            switch (currentState)
+            {
+                case AIState.Patrolling:
+                    MoveToNextPatrolPoint();
+                    break;
+                case AIState.Chasing:
+                    agent.SetDestination(lastKnownPlayerPos);
+                    break;
+                case AIState.Searching:
+                    // The search coroutine will handle this
+                    break;
+            }
+        }
+
+
         if (visionCone.IsWallAhead(out Vector3 betterDirection))
         {
             Vector3 newTargetPosition = transform.position + betterDirection * 3f;
