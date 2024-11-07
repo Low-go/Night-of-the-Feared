@@ -8,12 +8,13 @@ public class FlashlightDetector : MonoBehaviour
     [SerializeField] private float coneAngle = 30f;
     [SerializeField] private int rayCount = 8;
     [SerializeField] private LayerMask detectionMask = -1; // Will detect on all layers by default
-    
+
     [Header("Debug")]
-    [SerializeField] private bool showDebugRays = false;
+    [SerializeField] private bool showDebugRays = true;
 
     private Light spotLight;
     private HashSet<AIMovement> litMonsters = new HashSet<AIMovement>();
+    private Dictionary<AIMovement, bool> previousLightStates = new Dictionary<AIMovement, bool>(); //not sure if its working
     private const float MIN_DOT_PRODUCT = 0.5f; // Cosine of maximum angle to be considered "in light"
 
     private void Start()
@@ -41,6 +42,27 @@ public class FlashlightDetector : MonoBehaviour
 
         // Cast detection rays
         CastDetectionRays();
+
+        // Collect changes to update later
+        List<AIMovement> monstersToUpdate = new List<AIMovement>();
+
+        foreach (var monster in previousLightStates.Keys)
+        {
+            bool currentState = monster.IsInLight;
+            bool previousState = previousLightStates[monster];
+
+            if (currentState != previousState)
+            {
+                Debug.Log($"[FlashlightDetector] {monster.gameObject.name} IsInLight changed to {currentState}");
+                monstersToUpdate.Add(monster); // Track monster state changes
+            }
+        }
+
+        // Now update the light state after the loop
+        foreach (var monster in monstersToUpdate)
+        {
+            previousLightStates[monster] = monster.IsInLight;
+        }
     }
 
     private void CastDetectionRays()
@@ -52,7 +74,7 @@ public class FlashlightDetector : MonoBehaviour
         for (int i = 0; i < rayCount; i++)
         {
             float angle = ((float)i / rayCount) * coneAngle;
-            
+
             // Create rotations around the forward axis
             Quaternion rotation = Quaternion.AngleAxis(angle, transform.up);
             Vector3 direction = rotation * transform.forward;
@@ -77,25 +99,24 @@ public class FlashlightDetector : MonoBehaviour
     private void CastRay(Vector3 direction)
     {
         RaycastHit[] hits = Physics.RaycastAll(transform.position, direction, detectionRange, detectionMask);
-        
+
         foreach (RaycastHit hit in hits)
         {
-            // Check if this is a monster
             AIMovement monster = hit.collider.GetComponent<AIMovement>();
             if (monster != null)
             {
-                // Calculate if the monster is within the light cone
                 Vector3 directionToMonster = (hit.point - transform.position).normalized;
                 float dotProduct = Vector3.Dot(transform.forward, directionToMonster);
 
-                // Check if monster is within the cone angle
-                if (dotProduct > MIN_DOT_PRODUCT)
+                if (dotProduct > MIN_DOT_PRODUCT &&
+                    !Physics.Raycast(transform.position, directionToMonster, hit.distance - 0.1f, detectionMask))
                 {
-                    // Check if there's any obstacle between the light and the monster
-                    if (!Physics.Raycast(transform.position, directionToMonster, hit.distance - 0.1f, detectionMask))
+                    monster.IsInLight = true;
+                    litMonsters.Add(monster);
+
+                    if (!previousLightStates.ContainsKey(monster))
                     {
-                        monster.IsInLight = true;
-                        litMonsters.Add(monster);
+                        previousLightStates[monster] = false; // Initialize if not tracked
                     }
                 }
             }
@@ -114,7 +135,7 @@ public class FlashlightDetector : MonoBehaviour
         Gizmos.color = Color.yellow;
         float halfAngle = coneAngle * 0.5f;
         Vector3 forward = transform.forward * detectionRange;
-        
+
         // Draw cone visualization
         Vector3 right = Quaternion.Euler(0, halfAngle, 0) * forward;
         Vector3 left = Quaternion.Euler(0, -halfAngle, 0) * forward;

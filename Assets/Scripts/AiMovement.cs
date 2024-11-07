@@ -19,6 +19,13 @@ public class AIMovement : MonoBehaviour
     [Header("light Sensitivity")]
     private bool isInLight = false;
 
+    [Header("Footsteps Settings")]
+    public AudioSource footstepAudioSource;
+    private AudioClip footstepSound;
+    private float footstepVolumeWhileWalking = 0.5f;
+    private float footstepVolumeWhileStanding = 0.1f;
+    private float distanceThresholdForLoudness = 10f;
+
     private NavMeshAgent agent;
     private EnemyVisionCone visionCone;
     private List<Vector3> patrolPoints;
@@ -42,7 +49,7 @@ public class AIMovement : MonoBehaviour
         get => isInLight;
         set 
         {
-            Debug.Log($"[AIMovement] {gameObject.name} IsInLight changing from {isInLight} to {value}");
+            
             isInLight = value;
         }
     }
