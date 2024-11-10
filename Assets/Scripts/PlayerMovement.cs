@@ -8,44 +8,61 @@ public class PlayerMovement : MonoBehaviour
     [Header("Movement Settings")]
     private CharacterController controller;
     public Camera playerCamera;
-    public float speed = 5f;
+    private float walkSpeed = 0.8f;
+    private float sprintSpeed = 1.3f; // Speed while sprinting
+    private float currentSpeed;
     public float mouseSensitivity;
     private float xRotation = 0f;
 
+    [Header("Stamina Settings")]
+    private float staminaDrainRate = 0.29f; // How fast stamina drains while sprinting
+    private float staminaRegenRate = 0.2f; // How fast stamina regenerates
+    public float staminaRegenDelay = 5f; 
+    private float currentStamina = 1f;
+    private float lastSprintTime;
+    public Slider staminaSlider;
 
     [Header("FlashLight Stuff")]
     public GameObject spotlight;
     private Slider batterySlider;
-    public float batteryDrainRate = 0.02f; // how fast battery drains
+    public float batteryDrainRate = 0.02f;
     private float currentBattery = 1f;
     public AudioClip clickSound;
     private AudioSource audioSource;
 
     void Start()
     {
-        // locks the cursor so it cant be seen as is custom in fps games
+        // this is so the cursor does not appear when the player is in first person
         Cursor.lockState = CursorLockMode.Locked;
         controller = GetComponent<CharacterController>();
         audioSource = gameObject.AddComponent<AudioSource>();
-
-        batterySlider = GameObject.Find("Slider")?.GetComponent<Slider>();
+        batterySlider = GameObject.Find("Flashlight")?.GetComponent<Slider>();
+        staminaSlider = GameObject.Find("Stamina")?.GetComponent<Slider>();
         currentBattery = 1f;
+        currentSpeed = walkSpeed;
+        currentStamina = 1f;
 
-        // this if for test purposes, please delete later
         if (batterySlider != null)
         {
-            Debug.Log("Slider successfully found and assigned!");
+            Debug.Log("Battery Slider successfully found and assigned!");
             batterySlider.value = currentBattery;
         }
         else
         {
-            Debug.LogWarning("Slider not found! Check the slider's name or ensure it is in the scene.");
+            Debug.LogWarning("Battery Slider not found! Check the slider's name or ensure it is in the scene.");
         }
-        //lets start this off
-        spotlight.SetActive(false);
 
-        //currentBattery = 1f;
-        //batterySlider.value = currentBattery;
+        if (staminaSlider != null)
+        {
+            Debug.Log("Stamina Slider successfully found and assigned!");
+            staminaSlider.value = currentStamina;
+        }
+        else
+        {
+            Debug.LogWarning("Stamina Slider not found! Check the slider's name or ensure it is in the scene.");
+        }
+
+        spotlight.SetActive(false);
     }
 
     void Update()
@@ -53,14 +70,47 @@ public class PlayerMovement : MonoBehaviour
         HandleMovement();
         HandleCameraRotation();
         HandleFlashlight();
+        HandleStamina();
     }
 
     void HandleMovement()
     {
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
+
+        // Handle sprinting
+        if (Input.GetKey(KeyCode.LeftShift) && currentStamina > 0)
+        {
+            currentSpeed = sprintSpeed;
+            lastSprintTime = Time.time;
+        }
+        else
+        {
+            currentSpeed = walkSpeed;
+        }
+
         Vector3 move = transform.right * horizontal + transform.forward * vertical;
-        controller.Move(move * speed * Time.deltaTime);
+        controller.Move(move * currentSpeed * Time.deltaTime);
+    }
+
+    void HandleStamina()
+    {
+        // Drain stamina while sprinting
+        if (Input.GetKey(KeyCode.LeftShift) && currentStamina > 0)
+        {
+            currentStamina = Mathf.Max(0, currentStamina - staminaDrainRate * Time.deltaTime);
+        }
+        // Regenerate stamina after delay
+        else if (Time.time - lastSprintTime > staminaRegenDelay)
+        {
+            currentStamina = Mathf.Min(1f, currentStamina + staminaRegenRate * Time.deltaTime);
+        }
+
+        // Update stamina slider
+        if (staminaSlider != null)
+        {
+            staminaSlider.value = currentStamina;
+        }
     }
 
     void HandleCameraRotation()
@@ -75,14 +125,11 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleFlashlight()
     {
-        // Only allow toggling if we have battery
         if (Input.GetMouseButtonDown(0) && currentBattery > 0)
         {
             if (spotlight != null)
             {
                 spotlight.SetActive(!spotlight.activeSelf);
-
-                // Play click sound
                 if (clickSound != null)
                 {
                     audioSource.PlayOneShot(clickSound);
@@ -90,13 +137,10 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
-        // Drain battery while flashlight is on
         if (spotlight != null && spotlight.activeSelf)
         {
             currentBattery = Mathf.Max(0, currentBattery - batteryDrainRate * Time.deltaTime);
             batterySlider.value = currentBattery;
-
-            // Turn off flashlight if battery dies
             if (currentBattery <= 0)
             {
                 spotlight.SetActive(false);

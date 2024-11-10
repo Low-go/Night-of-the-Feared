@@ -7,43 +7,41 @@ public class FlashlightDetector : MonoBehaviour
     [SerializeField] private float detectionRange = 10f;
     [SerializeField] private float coneAngle = 30f;
     [SerializeField] private int rayCount = 8;
-    [SerializeField] private LayerMask detectionMask = -1; // Will detect on all layers by default
+    [SerializeField] private LayerMask detectionMask = -1;
 
     [Header("Debug")]
     [SerializeField] private bool showDebugRays = true;
 
     private Light spotLight;
     private HashSet<AIMovement> litMonsters = new HashSet<AIMovement>();
-    private Dictionary<AIMovement, bool> previousLightStates = new Dictionary<AIMovement, bool>(); //not sure if its working
-    private const float MIN_DOT_PRODUCT = 0.5f; // Cosine of maximum angle to be considered "in light"
+    private Dictionary<AIMovement, bool> previousLightStates = new Dictionary<AIMovement, bool>();
+    private const float MIN_DOT_PRODUCT = 0.5f;
 
     private void Start()
     {
-        spotLight = GetComponent<Light>();
+        spotLight = transform.Find("Spot Light")?.GetComponent<Light>();
         if (spotLight)
         {
-            // Match the spotlight's range and angle if available
             detectionRange = spotLight.range;
             coneAngle = spotLight.spotAngle;
+        }
+        else
+        {
+            Debug.LogWarning("Spot Light child not found on Flashlight object!");
         }
     }
 
     private void Update()
     {
-        // Clear previous state
-        foreach (var monster in litMonsters)
+        if (spotLight == null || !spotLight.enabled || !spotLight.gameObject.activeSelf)
         {
-            if (monster != null)
-            {
-                monster.IsInLight = false;
-            }
+            ResetMonsterLighting();
+            return;
         }
-        litMonsters.Clear();
 
-        // Cast detection rays
+        ClearPreviousLighting();
         CastDetectionRays();
 
-        // Collect changes to update later
         List<AIMovement> monstersToUpdate = new List<AIMovement>();
 
         foreach (var monster in previousLightStates.Keys)
@@ -54,11 +52,10 @@ public class FlashlightDetector : MonoBehaviour
             if (currentState != previousState)
             {
                 Debug.Log($"[FlashlightDetector] {monster.gameObject.name} IsInLight changed to {currentState}");
-                monstersToUpdate.Add(monster); // Track monster state changes
+                monstersToUpdate.Add(monster);
             }
         }
 
-        // Now update the light state after the loop
         foreach (var monster in monstersToUpdate)
         {
             previousLightStates[monster] = monster.IsInLight;
@@ -67,25 +64,20 @@ public class FlashlightDetector : MonoBehaviour
 
     private void CastDetectionRays()
     {
-        // Cast central ray
         CastRay(transform.forward);
 
-        // Cast surrounding rays
         for (int i = 0; i < rayCount; i++)
         {
             float angle = ((float)i / rayCount) * coneAngle;
 
-            // Create rotations around the forward axis
             Quaternion rotation = Quaternion.AngleAxis(angle, transform.up);
             Vector3 direction = rotation * transform.forward;
             CastRay(direction);
 
-            // Cast rays in a cone pattern
             rotation = Quaternion.AngleAxis(-angle, transform.up);
             direction = rotation * transform.forward;
             CastRay(direction);
 
-            // Add some rays rotated around the right axis for better coverage
             rotation = Quaternion.AngleAxis(angle, transform.right);
             direction = rotation * transform.forward;
             CastRay(direction);
@@ -116,7 +108,7 @@ public class FlashlightDetector : MonoBehaviour
 
                     if (!previousLightStates.ContainsKey(monster))
                     {
-                        previousLightStates[monster] = false; // Initialize if not tracked
+                        previousLightStates[monster] = false;
                     }
                 }
             }
@@ -128,6 +120,31 @@ public class FlashlightDetector : MonoBehaviour
         }
     }
 
+    private void ClearPreviousLighting()
+    {
+        foreach (var monster in litMonsters)
+        {
+            if (monster != null)
+            {
+                monster.IsInLight = false;
+            }
+        }
+        litMonsters.Clear();
+    }
+
+    private void ResetMonsterLighting()
+    {
+        foreach (var monster in litMonsters)
+        {
+            if (monster != null)
+            {
+                monster.IsInLight = false;
+                previousLightStates[monster] = false;
+            }
+        }
+        litMonsters.Clear();
+    }
+
     private void OnDrawGizmosSelected()
     {
         if (!showDebugRays) return;
@@ -136,7 +153,6 @@ public class FlashlightDetector : MonoBehaviour
         float halfAngle = coneAngle * 0.5f;
         Vector3 forward = transform.forward * detectionRange;
 
-        // Draw cone visualization
         Vector3 right = Quaternion.Euler(0, halfAngle, 0) * forward;
         Vector3 left = Quaternion.Euler(0, -halfAngle, 0) * forward;
         Vector3 up = Quaternion.Euler(-halfAngle, 0, 0) * forward;

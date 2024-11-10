@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(EnemyVisionCone))]
@@ -16,15 +17,22 @@ public class AIMovement : MonoBehaviour
     [SerializeField] private float searchDuration = 5f;
     [SerializeField] private float searchAreaRadius = 3f;
 
-    [Header("light Sensitivity")]
+    [Header("Light Sensitivity")]
     private bool isInLight = false;
 
-    [Header("Footsteps Settings")]
-    public AudioSource footstepAudioSource;
-    private AudioClip footstepSound;
-    private float footstepVolumeWhileWalking = 0.5f;
-    private float footstepVolumeWhileStanding = 0.1f;
-    private float distanceThresholdForLoudness = 10f;
+    [Header("Audio Settings")]
+    public AudioSource walkingAudioSource;
+    public AudioSource growlAudioSource;
+    public AudioSource screamAudioSource;
+    public bool canScream = false; // Set true for first fearful enemy types
+    [Range(0f, 1f)]
+    public float walkingVolume = 0.5f;
+    [Range(0f, 1f)]
+    public float idleVolume = 0.1f;
+    [Range(0f, 1f)]
+    public float growlVolume = 0.7f;
+    [Range(0f, 1f)]
+    public float screamVolume = 1f;
 
     private NavMeshAgent agent;
     private EnemyVisionCone visionCone;
@@ -43,13 +51,11 @@ public class AIMovement : MonoBehaviour
         WaitingAtPatrol
     }
 
-    //to freeze them if they are fearful
     public bool IsInLight
     {
         get => isInLight;
-        set 
+        set
         {
-            
             isInLight = value;
         }
     }
@@ -60,7 +66,6 @@ public class AIMovement : MonoBehaviour
     {
         agent = GetComponent<NavMeshAgent>();
         visionCone = GetComponent<EnemyVisionCone>();
-
 
         // Get patrol points from spawn manager
         MazeSpawnManager spawnManager = FindObjectOfType<MazeSpawnManager>();
@@ -79,11 +84,19 @@ public class AIMovement : MonoBehaviour
         currentState = AIState.Patrolling;
         agent.speed = patrolSpeed;
         MoveToNextPatrolPoint();
+
+        if (walkingAudioSource != null)
+        {
+            walkingAudioSource.loop = true;
+            walkingAudioSource.Play();
+        }
+
+        StartCoroutine(PlayRandomGrowls());
     }
 
     private void Update()
     {
-        
+        UpdateAudio();
         UpdateMovement(); // Wall avoidance check
 
         switch (currentState)
@@ -103,9 +116,61 @@ public class AIMovement : MonoBehaviour
         }
     }
 
+    private IEnumerator PlayRandomGrowls()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(Random.Range(60f, 80f));
+
+            // Add probability check - 1/3 chance to growl
+            if (Random.value <= 0.333f && currentState != AIState.Chasing)  // Don't play random growls during chase
+            {
+                if (growlAudioSource != null && !growlAudioSource.isPlaying)
+                {
+                    growlAudioSource.time = 0f;
+                    growlAudioSource.volume = growlVolume;
+                    growlAudioSource.Play();
+                    StartCoroutine(StopGrowlAfterTime(6f));
+                }
+            }
+        }
+    }
+
+    private IEnumerator StopGrowlAfterTime(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        if (growlAudioSource != null && growlAudioSource.isPlaying)
+        {
+            growlAudioSource.Stop();
+        }
+    }
+
+    private void UpdateAudio()
+    {
+        // Update walking sound volume based on movement
+        if (walkingAudioSource != null)
+        {
+            walkingAudioSource.volume = agent.velocity.magnitude > 0.1f ? walkingVolume : idleVolume;
+        }
+
+        // Handle screaming during chase instead of light detection
+        if (canScream && screamAudioSource != null)
+        {
+            if (currentState == AIState.Chasing && !screamAudioSource.isPlaying)
+            {
+                screamAudioSource.loop = true;
+                screamAudioSource.volume = screamVolume;
+                screamAudioSource.Play();
+            }
+            else if (currentState != AIState.Chasing && screamAudioSource.isPlaying)
+            {
+                screamAudioSource.Stop();
+            }
+        }
+    }
+
     private void UpdateMovement()
     {
-
         if (isInLight)
         {
             agent.isStopped = true;
@@ -133,13 +198,11 @@ public class AIMovement : MonoBehaviour
             }
         }
 
-
         if (visionCone.IsWallAhead(out Vector3 betterDirection))
         {
             Vector3 newTargetPosition = transform.position + betterDirection * 3f;
-            NavMeshPath path = new NavMeshPath(); // Declare the path variable
+            NavMeshPath path = new NavMeshPath();
 
-            // Pass the existing path variable to the method without using 'out' again
             if (NavMesh.CalculatePath(transform.position, newTargetPosition, NavMesh.AllAreas, path) &&
                 path.status == NavMeshPathStatus.PathComplete)
             {
@@ -276,36 +339,27 @@ public class AIMovement : MonoBehaviour
         float waitedTime = 0f;
         while (waitedTime < waitTimeAtPatrolPoint)
         {
-            transform.Rotate(0, rotationSpeed * Time.deltaTime, 0);
             waitedTime += Time.deltaTime;
             yield return null;
         }
 
-        isWaitingAtPatrol = false;
-        currentState = AIState.Patrolling;
         MoveToNextPatrolPoint();
-    }
-
-    private void MoveToNextPatrolPoint()
-    {
-        if (patrolPoints == null || patrolPoints.Count == 0) return;
-
-        agent.SetDestination(patrolPoints[currentPatrolIndex]);
-        currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Count;
     }
 
     private bool HasReachedDestination()
     {
-        return !agent.pathPending &&
-               agent.remainingDistance <= agent.stoppingDistance &&
-               (!agent.hasPath || agent.velocity.sqrMagnitude == 0f);
+        return agent.remainingDistance <= agent.stoppingDistance;
     }
 
-    private void OnTriggerEnter(Collider other)
+    private void MoveToNextPatrolPoint()
     {
-        if (other.CompareTag("Player"))
-        {
-            Debug.Log("Caught the player!");
-        }
+        if (patrolPoints == null || patrolPoints.Count == 0)
+            return;
+
+        if (currentPatrolIndex >= patrolPoints.Count)
+            currentPatrolIndex = 0;
+
+        agent.SetDestination(patrolPoints[currentPatrolIndex]);
+        currentPatrolIndex++;
     }
 }
