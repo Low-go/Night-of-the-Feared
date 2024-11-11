@@ -6,23 +6,22 @@ using UnityEngine.AI;
 public class EnemyVisionCone : MonoBehaviour
 {
     [Header("Vision Settings")]
-    [SerializeField] private float viewRadius = 8f; // Increased for better wall detection
-    [SerializeField] private float viewAngle = 120f; // Widened for better peripheral vision
+    [SerializeField] private float viewRadius = 12f;
+    [SerializeField] private float viewAngle = 140f;
+    [SerializeField] private float peripheralViewDistance = 3f;
+    [SerializeField] private float instantDetectionDistance = 2f;
     [SerializeField] private LayerMask targetMask;
     [SerializeField] private LayerMask obstacleMask;
-    [SerializeField] private float meshResolution = 1f;
-    [SerializeField] private int edgeResolveIterations = 4;
-    [SerializeField] private float edgeDstThreshold = 0.5f;
 
     [Header("Wall Avoidance")]
     [SerializeField] private float wallAvoidanceDistance = 2f;
     [SerializeField] private float sideCheckAngle = 45f;
 
     [Header("Jitter Settings")]
-    [SerializeField] private float jitterCheckInterval = 0.5f; // How often to check if stuck
-    [SerializeField] private float stuckThreshold = 0.1f; // Distance to consider as "stuck"
-    [SerializeField] private float jitterRotationStrength = 45f; // Maximum rotation angle
-    [SerializeField] private float jitterMoveStrength = 2f; // Movement force when jittering
+    [SerializeField] private float jitterCheckInterval = 0.5f;
+    [SerializeField] private float stuckThreshold = 0.1f;
+    [SerializeField] private float jitterRotationStrength = 45f;
+    [SerializeField] private float jitterMoveStrength = 2f;
 
     [Header("Debug Visualization")]
     [SerializeField] private bool showDebugVisuals = true;
@@ -73,24 +72,19 @@ public class EnemyVisionCone : MonoBehaviour
     {
         if (agent == null) return;
 
-        // Random rotation
         float randomRotation = Random.Range(-jitterRotationStrength, jitterRotationStrength);
         transform.Rotate(0, randomRotation, 0);
 
-        // Random movement direction
         Vector3 randomDirection = Random.insideUnitSphere;
         randomDirection.y = 0;
         randomDirection.Normalize();
 
-        // Apply movement
         Vector3 jitterPosition = transform.position + randomDirection * jitterMoveStrength;
-        NavMeshHit hit;
-        if (NavMesh.SamplePosition(jitterPosition, out hit, jitterMoveStrength, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(jitterPosition, out NavMeshHit hit, jitterMoveStrength, NavMesh.AllAreas))
         {
             agent.SetDestination(hit.position);
         }
 
-        // Temporarily increase speed for the jitter movement
         float originalSpeed = agent.speed;
         agent.speed *= 1.5f;
         StartCoroutine(ResetSpeed(originalSpeed));
@@ -110,41 +104,42 @@ public class EnemyVisionCone : MonoBehaviour
         targetInSight = false;
         currentTarget = null;
 
-        Collider[] targetsInViewRadius = Physics.OverlapSphere(transform.position, viewRadius, targetMask);
-        for (int i = 0; i < targetsInViewRadius.Length; i++)
+        // Instant detection for close-range
+        Collider[] nearTargets = Physics.OverlapSphere(transform.position, instantDetectionDistance, targetMask);
+        if (nearTargets.Length > 0)
         {
-            Transform target = targetsInViewRadius[i].transform;
-            Vector3 dirToTarget = (target.position - transform.position).normalized;
-
-            if (Vector3.Angle(transform.forward, dirToTarget) < viewAngle / 2)
+            Transform target = nearTargets[0].transform;
+            if (!Physics.Raycast(transform.position, (target.position - transform.position).normalized, instantDetectionDistance, obstacleMask))
             {
-                float dstToTarget = Vector3.Distance(transform.position, target.position);
+                targetInSight = true;
+                currentTarget = target;
+                lastKnownTargetPosition = target.position;
+                return;
+            }
+        }
+
+        // Normal vision cone with peripheral vision
+        Collider[] targetsInViewRadius = Physics.OverlapSphere(transform.position, viewRadius, targetMask);
+        foreach (var targetCollider in targetsInViewRadius)
+        {
+            Transform target = targetCollider.transform;
+            Vector3 dirToTarget = (target.position - transform.position).normalized;
+            float dstToTarget = Vector3.Distance(transform.position, target.position);
+
+            bool inPeripheralVision = dstToTarget <= peripheralViewDistance;
+            float checkAngle = inPeripheralVision ? viewAngle * 1.5f : viewAngle;
+
+            if (Vector3.Angle(transform.forward, dirToTarget) < checkAngle / 2)
+            {
                 if (!Physics.Raycast(transform.position, dirToTarget, dstToTarget, obstacleMask))
                 {
                     targetInSight = true;
                     currentTarget = target;
                     lastKnownTargetPosition = target.position;
+                    return;
                 }
             }
         }
-    }
-
-    public bool IsPositionInSight(Vector3 position)
-    {
-        if (Vector3.Distance(transform.position, position) > viewRadius)
-            return false;
-
-        Vector3 dirToPosition = (position - transform.position).normalized;
-        if (Vector3.Angle(transform.forward, dirToPosition) > viewAngle / 2)
-            return false;
-
-        if (Physics.Raycast(transform.position, dirToPosition, out RaycastHit hit, viewRadius, obstacleMask))
-        {
-            if (hit.distance < Vector3.Distance(transform.position, position))
-                return false;
-        }
-
-        return true;
     }
 
     public bool IsWallAhead(out Vector3 betterDirection)
@@ -159,33 +154,10 @@ public class EnemyVisionCone : MonoBehaviour
                 bool leftClear = !Physics.Raycast(currentPosition, Quaternion.Euler(0, -sideCheckAngle, 0) * transform.forward, wallAvoidanceDistance);
                 bool rightClear = !Physics.Raycast(currentPosition, Quaternion.Euler(0, sideCheckAngle, 0) * transform.forward, wallAvoidanceDistance);
 
-                NavMeshAgent agent = GetComponent<NavMeshAgent>();
-                Vector3 targetPosition = agent.destination;
-
                 Vector3 leftDir = Quaternion.Euler(0, -sideCheckAngle, 0) * transform.forward;
                 Vector3 rightDir = Quaternion.Euler(0, sideCheckAngle, 0) * transform.forward;
 
-                float leftAngleToTarget = Vector3.Angle(leftDir, targetPosition - currentPosition);
-                float rightAngleToTarget = Vector3.Angle(rightDir, targetPosition - currentPosition);
-
-                if (leftClear && rightClear)
-                {
-                    betterDirection = leftAngleToTarget < rightAngleToTarget ? leftDir : rightDir;
-                }
-                else if (leftClear)
-                {
-                    betterDirection = leftDir;
-                }
-                else if (rightClear)
-                {
-                    betterDirection = rightDir;
-                }
-                else
-                {
-                    betterDirection = leftAngleToTarget < rightAngleToTarget ?
-                        Quaternion.Euler(0, -sideCheckAngle * 2, 0) * transform.forward :
-                        Quaternion.Euler(0, sideCheckAngle * 2, 0) * transform.forward;
-                }
+                betterDirection = leftClear ? leftDir : (rightClear ? rightDir : transform.forward);
                 return true;
             }
         }
