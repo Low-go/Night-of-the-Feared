@@ -15,9 +15,9 @@ public class PlayerMovement : MonoBehaviour
     private float xRotation = 0f;
 
     [Header("Stamina Settings")]
-    private float staminaDrainRate = 0.29f; // How fast stamina drains while sprinting
+    private float staminaDrainRate = 0.22f; // How fast stamina drains while sprinting
     private float staminaRegenRate = 0.2f; // How fast stamina regenerates
-    public float staminaRegenDelay = 5f; 
+    private float staminaRegenDelay = 3f; 
     private float currentStamina = 1f;
     private float lastSprintTime;
     public Slider staminaSlider;
