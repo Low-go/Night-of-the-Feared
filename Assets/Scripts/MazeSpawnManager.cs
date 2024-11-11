@@ -10,6 +10,12 @@ public class MazeSpawnManager : MonoBehaviour
     [SerializeField] private MazeGenerator mazeGenerator;
     [SerializeField] private GameObject playerPrefab;
     [SerializeField] private GameObject enemyPrefab;
+    public GameObject padPrefab;
+    public GameObject batteryPrefab;
+
+    [Header("Battery Spawn Settings")]
+    [SerializeField] private int numberOfBatteries = 4;
+    [SerializeField] private float minBatteryDistance = 2f;
 
     [Header("Enemy Spawn Settings")]
     [SerializeField] private int numberOfEnemies = 5;
@@ -17,10 +23,17 @@ public class MazeSpawnManager : MonoBehaviour
     [SerializeField] private float minDistanceBetweenPatrolPoints = 3f;
     [SerializeField] private int patrolPointsPerEnemy = 3;
 
+    [Header("Telepad Settings")]
+    [SerializeField] private float minTelepadPlayerDistance = 4f;
+    [SerializeField] private float maxTelepadEnemyDistance = 8f;
+    [SerializeField] private float minTelepadEnemyDistance = 3f;
+
     [Header("Size Settings")]
     [SerializeField] private float cellSize = 1f;
     [SerializeField] private float playerRadius = 0.4f;
     [SerializeField] private float enemyRadius = 0.4f;
+    [SerializeField] private float batteryRadius = 0.3f;
+    [SerializeField] private float telepadRadius = 0.5f;
     [SerializeField] private LayerMask wallLayer;
 
     // Structure to hold patrol route data
@@ -66,6 +79,8 @@ public class MazeSpawnManager : MonoBehaviour
         MazeCell[,] maze = mazeGenerator.GetMaze();
         SpawnPlayer(maze);
         GeneratePatrolRoutesAndSpawnEnemies(maze);
+        SpawnBatteries(maze);
+        SpawnTelepad(maze);
     }
 
     private bool IsNavMeshReady()
@@ -298,6 +313,143 @@ public class MazeSpawnManager : MonoBehaviour
                 return false;
         }
 
+        return true;
+    }
+
+    private void SpawnBatteries(MazeCell[,] maze)
+    {
+        int batteriesSpawned = 0;
+        int maxAttempts = 100;
+
+        while (batteriesSpawned < numberOfBatteries && maxAttempts > 0)
+        {
+            Vector3? spawnPos = FindValidBatteryPosition(maze);
+            if (spawnPos.HasValue)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f); // why the heck is it spawned on the left side without this
+                Instantiate(batteryPrefab, spawnPos.Value, rotation);
+                usedPositions.Add(spawnPos.Value);
+                batteriesSpawned++;
+            }
+            maxAttempts--;
+        }
+
+        if (batteriesSpawned < numberOfBatteries)
+        {
+            Debug.LogWarning($"Could only spawn {batteriesSpawned} out of {numberOfBatteries} batteries!");
+        }
+    }
+
+    private Vector3? FindValidBatteryPosition(MazeCell[,] maze)
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            int x = Random.Range(0, mazeGenerator.mazeWidth);
+            int y = Random.Range(0, mazeGenerator.mazeHeight);
+
+            if (!maze[x, y].topWall && !maze[x, y].leftWall)
+            {
+                float offsetX = Random.Range(-0.3f, 0.3f);
+                float offsetZ = Random.Range(-0.3f, 0.3f);
+
+                float worldX = x * cellSize + (cellSize / 2) + offsetX;
+                float worldZ = y * cellSize + (cellSize / 2) + offsetZ;
+                Vector3 potentialPos = new Vector3(worldX, 0.08f, worldZ);
+
+                if (IsValidBatteryPosition(potentialPos))
+                {
+                    return potentialPos;
+                }
+            }
+        }
+        return null;
+    }
+
+    private bool IsValidBatteryPosition(Vector3 point)
+    {
+        // Check if position is clear of obstacles
+        if (!IsPositionClear(point, batteryRadius))
+            return false;
+
+        // Check minimum distance from other objects
+        foreach (Vector3 usedPos in usedPositions)
+        {
+            if (Vector3.Distance(point, usedPos) < minBatteryDistance)
+                return false;
+        }
+
+        return true;
+    }
+
+    private void SpawnTelepad(MazeCell[,] maze)
+    {
+        int maxAttempts = 100;
+        while (maxAttempts > 0)
+        {
+            Vector3? spawnPos = FindValidTelepadPosition(maze);
+            if (spawnPos.HasValue)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                Instantiate(padPrefab, spawnPos.Value, rotation);
+                return;
+            }
+            maxAttempts--;
+        }
+        Debug.LogWarning("Could not spawn telepad!");
+    }
+
+    private Vector3? FindValidTelepadPosition(MazeCell[,] maze)
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            int x = Random.Range(0, mazeGenerator.mazeWidth);
+            int y = Random.Range(0, mazeGenerator.mazeHeight);
+
+            if (!maze[x, y].topWall && !maze[x, y].leftWall)
+            {
+                float offsetX = Random.Range(-0.3f, 0.3f);
+                float offsetZ = Random.Range(-0.3f, 0.3f);
+
+                float worldX = x * cellSize + (cellSize / 2) + offsetX;
+                float worldZ = y * cellSize + (cellSize / 2) + offsetZ;
+                Vector3 potentialPos = new Vector3(worldX, 0.08f, worldZ);
+
+                if (IsValidTelepadPosition(potentialPos))
+                {
+                    return potentialPos;
+                }
+            }
+        }
+        return null;
+    }
+
+    private bool IsValidTelepadPosition(Vector3 point)
+    {
+        // Check if position is clear of obstacles
+        if (!IsPositionClear(point, telepadRadius))
+            return false;
+
+        // Check minimum distance from player
+        float playerDist = Vector3.Distance(point, playerPosition);
+        if (playerDist < minTelepadPlayerDistance)
+            return false;
+
+        // Check distance from enemies (using patrol routes)
+        if (patrolRoutes.Count > 0)
+        {
+            foreach (PatrolRoute route in patrolRoutes)
+            {
+                float enemyDist = Vector3.Distance(point, route.spawnPoint);
+                // If we find at least one enemy at a good distance, that's enough
+                if (enemyDist >= minTelepadEnemyDistance && enemyDist <= maxTelepadEnemyDistance)
+                {
+                    return true;
+                }
+            }
+            return false; // No enemies were at a good distance
+        }
+
+        // If there are no enemies, allow the telepad to spawn
         return true;
     }
 }
