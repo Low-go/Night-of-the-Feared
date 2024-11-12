@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -20,7 +21,7 @@ public class PlayerMovement : MonoBehaviour
     private float lastSprintTime;
     public Slider staminaSlider;
 
-    [Header("FlashLight Stuff")]
+    [Header("FlashLight Settings")]
     public GameObject spotlight;
     private Slider batterySlider;
     public float batteryDrainRate = 0.02f;
@@ -30,11 +31,21 @@ public class PlayerMovement : MonoBehaviour
     private AudioSource audioSource;
     private float batteryRechargeAmount = 0.35f; // Amount to recharge when collecting a cell
 
+    // Reference to MainManager
+    private MainManager mainManager;
+
     void Start()
+    {
+        InitializeComponents();
+        LoadFlashlightState();
+    }
+
+    void InitializeComponents()
     {
         Cursor.lockState = CursorLockMode.Locked;
         controller = GetComponent<CharacterController>();
         audioSource = gameObject.AddComponent<AudioSource>();
+        mainManager = MainManager.Instance;
 
         batterySlider = GameObject.Find("Flashlight")?.GetComponent<Slider>();
         staminaSlider = GameObject.Find("Stamina")?.GetComponent<Slider>();
@@ -42,6 +53,11 @@ public class PlayerMovement : MonoBehaviour
         currentSpeed = walkSpeed;
         currentStamina = 1f;
 
+        ValidateComponents();
+    }
+
+    void ValidateComponents()
+    {
         if (batterySlider != null)
         {
             Debug.Log("Battery Slider successfully found and assigned!");
@@ -63,6 +79,29 @@ public class PlayerMovement : MonoBehaviour
         }
 
         spotlight.SetActive(false);
+    }
+
+    void LoadFlashlightState()
+    {
+        if (mainManager != null)
+        {
+            if (SceneManager.GetActiveScene().name == "FirstLevel")
+            {
+                currentBattery = 1f;
+                mainManager.UpdateBatteryLevel(currentBattery);
+                spotlight.SetActive(false);
+            }
+            else
+            {
+                currentBattery = mainManager.currentBatteryLevel;
+                spotlight.SetActive(mainManager.isFlashlightOn);
+            }
+
+            if (batterySlider != null)
+            {
+                batterySlider.value = currentBattery;
+            }
+        }
     }
 
     void Update()
@@ -125,7 +164,14 @@ public class PlayerMovement : MonoBehaviour
         {
             if (spotlight != null)
             {
-                spotlight.SetActive(!spotlight.activeSelf);
+                bool newState = !spotlight.activeSelf;
+                spotlight.SetActive(newState);
+
+                if (mainManager != null)
+                {
+                    mainManager.SetFlashlightState(newState);
+                }
+
                 if (clickSound != null)
                 {
                     audioSource.PlayOneShot(clickSound);
@@ -136,10 +182,24 @@ public class PlayerMovement : MonoBehaviour
         if (spotlight != null && spotlight.activeSelf)
         {
             currentBattery = Mathf.Max(0, currentBattery - batteryDrainRate * Time.deltaTime);
-            batterySlider.value = currentBattery;
+
+            if (mainManager != null)
+            {
+                mainManager.UpdateBatteryLevel(currentBattery);
+            }
+
+            if (batterySlider != null)
+            {
+                batterySlider.value = currentBattery;
+            }
+
             if (currentBattery <= 0)
             {
                 spotlight.SetActive(false);
+                if (mainManager != null)
+                {
+                    mainManager.SetFlashlightState(false);
+                }
             }
         }
     }
@@ -155,9 +215,27 @@ public class PlayerMovement : MonoBehaviour
             }
 
             currentBattery = Mathf.Min(1f, currentBattery + batteryRechargeAmount);
-            batterySlider.value = currentBattery;
+
+            if (mainManager != null)
+            {
+                mainManager.UpdateBatteryLevel(currentBattery);
+            }
+
+            if (batterySlider != null)
+            {
+                batterySlider.value = currentBattery;
+            }
 
             Destroy(hit.gameObject);
+        }
+    }
+
+    void OnDisable()
+    {
+        if (mainManager != null)
+        {
+            mainManager.UpdateBatteryLevel(currentBattery);
+            mainManager.SetFlashlightState(spotlight != null && spotlight.activeSelf);
         }
     }
 }

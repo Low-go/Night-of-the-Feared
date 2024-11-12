@@ -98,27 +98,50 @@ public class MazeSpawnManager : MonoBehaviour
     }
     private bool IsPositionClear(Vector3 position, float radius)
     {
-        // Check overlap with a slightly smaller radius to ensure no wall touching
-        float checkRadius = radius * 0.9f;
+        // Increase the check radius for more conservative spacing
+        float checkRadius = radius * 1.2f;
 
         // Check if position overlaps with any colliders
         Collider[] hitColliders = Physics.OverlapSphere(position, checkRadius, wallLayer);
         if (hitColliders.Length > 0)
             return false;
 
-        // Cast rays in main directions to ensure enough clearance
+        // Cast rays in more directions for better corner detection
         Vector3[] directions = new Vector3[]
         {
             Vector3.forward, Vector3.back, Vector3.left, Vector3.right,
             (Vector3.forward + Vector3.right).normalized,
             (Vector3.forward + Vector3.left).normalized,
             (Vector3.back + Vector3.right).normalized,
-            (Vector3.back + Vector3.left).normalized
+            (Vector3.back + Vector3.left).normalized,
+            // Add diagonal rays at 30 and 60 degrees
+            Quaternion.Euler(0, 30, 0) * Vector3.forward,
+            Quaternion.Euler(0, 60, 0) * Vector3.forward,
+            Quaternion.Euler(0, 120, 0) * Vector3.forward,
+            Quaternion.Euler(0, 150, 0) * Vector3.forward,
+            Quaternion.Euler(0, 210, 0) * Vector3.forward,
+            Quaternion.Euler(0, 240, 0) * Vector3.forward,
+            Quaternion.Euler(0, 300, 0) * Vector3.forward,
+            Quaternion.Euler(0, 330, 0) * Vector3.forward
         };
+
+        // Increase the ray length for better corner detection
+        float rayLength = radius * 1.5f;
 
         foreach (Vector3 dir in directions)
         {
-            if (Physics.Raycast(position, dir, radius * 1.2f, wallLayer))
+            if (Physics.Raycast(position, dir, rayLength, wallLayer))
+                return false;
+        }
+
+        // Additional corner checks by casting rays slightly up and down
+        Vector3 slightlyUp = position + Vector3.up * 0.1f;
+        Vector3 slightlyDown = position + Vector3.down * 0.1f;
+
+        foreach (Vector3 dir in directions)
+        {
+            if (Physics.Raycast(slightlyUp, dir, rayLength, wallLayer) ||
+                Physics.Raycast(slightlyDown, dir, rayLength, wallLayer))
                 return false;
         }
 
