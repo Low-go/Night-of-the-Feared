@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,7 +15,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Stamina Settings")]
     private float staminaDrainRate = 0.22f; // How fast stamina drains while sprinting
     private float staminaRegenRate = 0.2f; // How fast stamina regenerates
-    private float staminaRegenDelay = 3f; 
+    private float staminaRegenDelay = 3f;
     private float currentStamina = 1f;
     private float lastSprintTime;
     public Slider staminaSlider;
@@ -28,17 +26,19 @@ public class PlayerMovement : MonoBehaviour
     public float batteryDrainRate = 0.02f;
     private float currentBattery = 1f;
     public AudioClip clickSound;
+    public AudioClip cellCollectSound;
     private AudioSource audioSource;
+    private float batteryRechargeAmount = 0.35f; // Amount to recharge when collecting a cell
 
     void Start()
     {
-        // this is so the cursor does not appear when the player is in first person
         Cursor.lockState = CursorLockMode.Locked;
         controller = GetComponent<CharacterController>();
         audioSource = gameObject.AddComponent<AudioSource>();
+
         batterySlider = GameObject.Find("Flashlight")?.GetComponent<Slider>();
         staminaSlider = GameObject.Find("Stamina")?.GetComponent<Slider>();
-        currentBattery = 1f;
+
         currentSpeed = walkSpeed;
         currentStamina = 1f;
 
@@ -78,7 +78,6 @@ public class PlayerMovement : MonoBehaviour
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
 
-        // Handle sprinting
         if (Input.GetKey(KeyCode.LeftShift) && currentStamina > 0)
         {
             currentSpeed = sprintSpeed;
@@ -95,18 +94,15 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleStamina()
     {
-        // Drain stamina while sprinting
         if (Input.GetKey(KeyCode.LeftShift) && currentStamina > 0)
         {
             currentStamina = Mathf.Max(0, currentStamina - staminaDrainRate * Time.deltaTime);
         }
-        // Regenerate stamina after delay
         else if (Time.time - lastSprintTime > staminaRegenDelay)
         {
             currentStamina = Mathf.Min(1f, currentStamina + staminaRegenRate * Time.deltaTime);
         }
 
-        // Update stamina slider
         if (staminaSlider != null)
         {
             staminaSlider.value = currentStamina;
@@ -145,6 +141,23 @@ public class PlayerMovement : MonoBehaviour
             {
                 spotlight.SetActive(false);
             }
+        }
+    }
+
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.gameObject.CompareTag("Cell"))
+        {
+            if (cellCollectSound != null)
+            {
+                audioSource.volume = 0.5f;
+                audioSource.PlayOneShot(cellCollectSound);
+            }
+
+            currentBattery = Mathf.Min(1f, currentBattery + batteryRechargeAmount);
+            batterySlider.value = currentBattery;
+
+            Destroy(hit.gameObject);
         }
     }
 }
