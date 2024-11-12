@@ -10,18 +10,12 @@ public class GameOverManager : MonoBehaviour
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private Button retryButton;
     [SerializeField] private Button quitButton;
-    [SerializeField] private Image overlayImage;
-
-    [Header("Settings")]
-    [SerializeField] private float overlayAlpha = 0.7f;
-    [SerializeField] private Color overlayColor = Color.gray;
-    [SerializeField] private Animator overlayAnimator;
 
     private bool isGameOver = false;
 
     private void Awake()
     {
-        // Ensure the panel is hidden at start
+        // Hide the GameOver panel at the start
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
 
@@ -31,52 +25,46 @@ public class GameOverManager : MonoBehaviour
 
         if (quitButton != null)
             quitButton.onClick.AddListener(QuitGame);
-
-        // Configure overlay
-        if (overlayImage != null)
-        {
-            Color newColor = overlayColor;
-            newColor.a = overlayAlpha;
-            overlayImage.color = newColor;
-        }
     }
 
     public void TriggerGameOver()
     {
         if (isGameOver) return;
+
         isGameOver = true;
 
-        // Show the game over UI
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Show the game over UI and pause the game
         if (gameOverPanel != null)
-        {
             gameOverPanel.SetActive(true);
-            // Trigger the animation
-            if (overlayAnimator != null)
-                overlayAnimator.SetTrigger("GameOverOpen");  // Your animation trigger name
-        }
 
         Time.timeScale = 0f;
     }
+
     private void RetryGame()
     {
-        // Unfreeze time
-        Time.timeScale = 1f;
+        // Unfreeze time and reload the current scene
+        Debug.Log("Retry pressed");
 
-        // Reload current scene
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        Time.timeScale = 1f;
         SceneManager.LoadScene("FirstLevel");
     }
 
     private void QuitGame()
     {
-        // Unfreeze time before quitting
+        Debug.Log("Quit pressed");
+        // Unfreeze time and load the main menu scene
         Time.timeScale = 1f;
+        SceneManager.LoadScene("Menu"); // Replace "Menu" with your main menu scene name if different
 
-        // Load your main menu scene
-        SceneManager.LoadScene("Menu"); // Replace with your menu scene name
-
-        // Or quit the application if this is a built game
-        #if UNITY_STANDALONE
+        // For standalone builds
+#if UNITY_STANDALONE
         Application.Quit();
-        #endif
+#endif
     }
 }

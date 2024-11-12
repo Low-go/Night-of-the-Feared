@@ -9,8 +9,9 @@ public class PlayerHealth : MonoBehaviour
     [Header("Effect References")]
     [SerializeField] private AudioSource hitSoundEffect;
     //[SerializeField] private GameObject screenRedOverlay;
-    [SerializeField] private CameraShake cameraShake;  // You'll need to create this script
-
+    [SerializeField] private CameraShake cameraShake;
+    
+    private GameOverManager gameOverManager;
     private int currentHealth;
     private bool isInvincible = false;
     private float invincibilityTimer = 0f;
@@ -18,8 +19,8 @@ public class PlayerHealth : MonoBehaviour
     private void Start()
     {
         currentHealth = maxHealth;
-        //if (screenRedOverlay != null)
-        //    screenRedOverlay.SetActive(false);
+
+
     }
 
     private void Update()
@@ -45,10 +46,27 @@ public class PlayerHealth : MonoBehaviour
 
         ApplyHitEffects();
 
+        // Trigger Game Over only if health is zero
         if (currentHealth <= 0)
         {
-            Debug.Log("Game Over!");
-            // Add game over logic here later
+            GameObject gameOverCanvas = GameObject.Find("GameOverCanvas");
+            if (gameOverCanvas != null)
+            {
+                gameOverManager = gameOverCanvas.GetComponent<GameOverManager>();
+                if (gameOverManager != null)
+                {
+                    Debug.Log("Found GameOverManager, triggering game over...");
+                    gameOverManager.TriggerGameOver();
+                }
+                else
+                {
+                    Debug.LogError("GameOverManager component not found on GameOverCanvas!");
+                }
+            }
+            else
+            {
+                Debug.LogError("GameOverCanvas not found in the scene!");
+            }
         }
     }
 
@@ -83,7 +101,7 @@ public class PlayerHealth : MonoBehaviour
         // Shake camera
         if (cameraShake != null)
         {
-            cameraShake.StartShake();  // You'll need to implement this
+            cameraShake.StartShake();
         }
     }
 }
